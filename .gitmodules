@@ -1,0 +1,12 @@
+[submodule "helpdesk-api-gateway"]
+	path = helpdesk-api-gateway
+	url = https://github.com/rafaelmotasolu/helpdesk-api-gateway.git
+[submodule "helpdesk-ticket-service"]
+	path = helpdesk-ticket-service
+	url = https://github.com/rafaelmotasolu/helpdesk-ticket-service.git
+[submodule "helpdesk-usuario-service"]
+	path = helpdesk-usuario-service
+	url = https://github.com/rafaelmotasolu/helpdesk-usuario-service.git
+[submodule "helpdesk-notification-service"]
+	path = helpdesk-notification-service
+	url = https://github.com/rafaelmotasolu/helpdesk-notification-service.git

@@ -4,7 +4,7 @@
 [submodule "helpdesk-ticket-service"]
 	path = helpdesk-ticket-service
 	url = https://github.com/rafaelmotasolu/helpdesk-ticket-service.git
-[submodule "helpdesk-usuario-service"]
+[submodule "helpdesk-user-service"]
 	path = helpdesk-usuario-service
 	url = https://github.com/rafaelmotasolu/helpdesk-usuario-service.git
 [submodule "helpdesk-notification-service"]

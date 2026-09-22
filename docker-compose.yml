@@ -1,0 +1,167 @@
+services:
+
+  # ==============================================================================
+  # POSTGRESQL (Banco de dados relacional compartilhado)
+  # ==============================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: helpdesk-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - helpdesk-net
+
+  # ==============================================================================
+  # RABBITMQ (Message Broker com painel de gerenciamento)
+  # ==============================================================================
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: helpdesk-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-guest}
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - helpdesk-net
+
+  # ==============================================================================
+  # USER SERVICE (Porta interna 8081)
+  # ==============================================================================
+  user-service:
+    build:
+      context: ./helpdesk-user-service
+      dockerfile: Dockerfile
+    container_name: helpdesk-user-service
+    restart: unless-stopped
+    env_file:
+      - path: ./helpdesk-user-service/.env
+        required: false
+    environment:
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_URL=jdbc:postgresql://postgres:5432/user_db
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - helpdesk-net
+
+  # ==============================================================================
+  # TICKET SERVICE (Porta interna 8082)
+  # ==============================================================================
+  ticket-service:
+    build:
+      context: ./helpdesk-ticket-service
+      dockerfile: Dockerfile
+    container_name: helpdesk-ticket-service
+    restart: unless-stopped
+    env_file:
+      - path: ./helpdesk-ticket-service/.env
+        required: false
+    environment:
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_URL=jdbc:postgresql://postgres:5432/ticket_db
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - helpdesk-net
+
+  # ==============================================================================
+  # NOTIFICATION SERVICE (Porta interna 8083)
+  # ==============================================================================
+  notification-service:
+    build:
+      context: ./helpdesk-notification-service
+      dockerfile: Dockerfile
+    container_name: helpdesk-notification-service
+    restart: unless-stopped
+    env_file:
+      - path: ./helpdesk-notification-service/.env
+        required: false
+    environment:
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_URL=jdbc:postgresql://postgres:5432/notification_db
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+    ports:
+      - "8083:8083"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - helpdesk-net
+
+  # ==============================================================================
+  # API GATEWAY (Ponto Único de Entrada: 8080)
+  # ==============================================================================
+  api-gateway:
+    build:
+      context: ./helpdesk-api-gateway
+      dockerfile: Dockerfile
+    container_name: helpdesk-api-gateway
+    restart: unless-stopped
+    env_file:
+      - path: ./helpdesk-api-gateway/.env
+        required: false
+    environment:
+      - GATEWAY_PORT=8080
+      - USER_SERVICE_URL=http://user-service:8081
+      - TICKET_SERVICE_URL=http://ticket-service:8082
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8083
+    ports:
+      - "8080:8080"
+    depends_on:
+      - user-service
+      - ticket-service
+      - notification-service
+    networks:
+      - helpdesk-net
+
+# ==============================================================================
+# VOLUMES PERSISTENTES
+# ==============================================================================
+volumes:
+  postgres_data:
+  rabbitmq_data:
+
+# ==============================================================================
+# REDE INTERNA
+# ==============================================================================
+networks:
+  helpdesk-net:
+    driver: bridge
